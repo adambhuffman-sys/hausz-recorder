@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Haüsz Recorder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@600;800&family=Rubik:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--lilac:#C8A2C8;--mint:#98E2C6;--coral:#FF7F6B;--sky:#87CEEB;--ink:#2B2340;--bg:#F7F2FB}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Rubik,system-ui,-apple-system,Roboto,sans-serif;padding:16px 16px 90px}
+h1,h2,h3{font-family:Kanit,system-ui,sans-serif;margin:.3em 0}
+h1{font-size:28px}
+.card{background:#fff;border-radius:24px;padding:18px;margin:14px 0;box-shadow:0 4px 0 rgba(0,0,0,.08)}
+.word{font-family:Kanit,system-ui,sans-serif;font-size:48px;font-weight:800;letter-spacing:2px;text-align:center;margin:6px 0}
+.tag{display:inline-block;padding:3px 12px;border-radius:99px;font-size:13px;font-weight:600}
+.easy{background:var(--mint)}.medium{background:var(--sky)}.hard{background:var(--coral);color:#fff}
+button{font-family:Kanit,system-ui,sans-serif;font-size:20px;font-weight:600;border:0;border-radius:20px;padding:16px;width:100%;margin:6px 0;color:var(--ink);background:var(--lilac);box-shadow:0 4px 0 rgba(0,0,0,.15)}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.15)}
+button:disabled{opacity:.4}
+.rec{background:var(--coral);color:#fff}.recording{animation:p 1s infinite}@keyframes p{50%{opacity:.6}}
+.mint{background:var(--mint)}.sky{background:var(--sky)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.words{display:flex;gap:6px;flex-wrap:wrap}.words button{width:auto;flex:1 1 30%;font-size:16px;padding:10px}
+.words button.cur{outline:4px solid var(--ink)}
+.att{border:2px solid var(--lilac);border-radius:18px;padding:12px;margin:10px 0}
+input[type=range]{width:100%;height:40px}
+textarea{width:100%;font:inherit;border-radius:12px;border:2px solid #ddd;padding:8px;min-height:44px}
+.muted{opacity:.65;font-size:14px}
+#bar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px;background:var(--bg)}
+#status{text-align:center;font-size:14px;min-height:18px}
+</style></head><body>
+<h1>Haüsz Recorder</h1>
+<div class="muted">Record a target → hear it reversed → mimic → hear the reveal → rate it. Everything is saved on this phone.</div>
+<div class="card"><div class="words" id="words"></div><button class="sky" id="shuffle">🔀 New 5 words</button></div>
+<div id="main"></div>
+<div id="bar"><div id="status"></div><button class="mint" id="export">⬇️ Export ZIP</button></div>
+<script>
+'use strict';
+// ---------- word list ----------
+const WORDS={easy:['CAT','MOON','DOG','SUN','BALL','FISH','TREE','CAKE','BOOK','HAT','MILK','RAIN','DUCK'],
+medium:['PICKLE','GARDEN','BUTTER','WINDOW','DRAGON','PLANET','CANDLE','MONKEY','JACKET','PENCIL','TURTLE','ROCKET','BASKET','LEMON'],
+hard:['CRISP','SQUIRREL','ALUMINUM','STRENGTHS','RHYTHM','ANEMONE','SIXTH','SPAGHETTI','PHENOMENON','THRESHOLD','WORCESTERSHIRE','ONOMATOPOEIA','BREWERY']};
+const pick=(a,n)=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a.slice(0,n)};
+// ---------- audio utils ----------
+const SR_OUT=16000,MAX_MS=4000;
+function reverse(f){const o=new Float32Array(f.length);for(let i=0,n=f.length;i<n;i++)o[i]=f[n-1-i];return o}
+async function resample(f,sr,to){ if(sr===to)return f;
+  const len=Math.max(1,Math.round(f.length*to/sr)),oc=new OfflineAudioContext(1,len,to),b=oc.createBuffer(1,f.length,sr);
+  b.copyToChannel(f,0);const s=oc.createBufferSource();s.buffer=b;s.connect(oc.destination);s.start();return (await oc.startRendering()).getChannelData(0).slice()}
+function wav16(f,sr){const n=f.length,buf=new ArrayBuffer(44+n*2),v=new DataView(buf);let p=0;
+  const s=t=>{for(const c of t)v.setUint8(p++,c.charCodeAt(0))},u32=x=>{v.setUint32(p,x,true);p+=4},u16=x=>{v.setUint16(p,x,true);p+=2};
+  s('RIFF');u32(36+n*2);s('WAVE');s('fmt ');u32(16);u16(1);u16(1);u32(sr);u32(sr*2);u16(2);u16(16);s('data');u32(n*2);
+  for(let i=0;i<n;i++){const x=Math.max(-1,Math.min(1,f[i]));v.setInt16(p,x<0?x*32768:x*32767,true);p+=2}return new Uint8Array(buf)}
+// ---------- minimal zip (store) ----------
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(d){let c=0xFFFFFFFF;for(let i=0;i<d.length;i++)c=CRC[(c^d[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zip(files){const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  for(const f of files){const name=enc.encode(f.name),data=f.data,crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);
+    h.setUint16(10,0,true);h.setUint16(12,0x21,true);h.setUint32(14,crc,true);h.setUint32(18,data.length,true);h.setUint32(22,data.length,true);h.setUint16(26,name.length,true);h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer),name,data);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
+    c.setUint16(12,0,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint16(28,name.length,true);
+    c.setUint32(42,off,true);cen.push(new Uint8Array(c.buffer),name);off+=30+name.length+data.length}
+  const cs=cen.reduce((a,b)=>a+b.length,0),e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);
+  e.setUint32(12,cs,true);e.setUint32(16,off,true);return new Blob([...parts,...cen,new Uint8Array(e.buffer)],{type:'application/zip'})}
+if(typeof module!=='undefined'){module.exports={reverse,wav16,crc32,zip};}
+</script>
+<script>
+'use strict';
+if(typeof document!=='undefined'){
+// ---------- IndexedDB ----------
+const DB=new Promise((res,rej)=>{const r=indexedDB.open('hausz-recorder',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const idb=(mode,fn)=>DB.then(db=>new Promise((res,rej)=>{const t=db.transaction('kv',mode),q=fn(t.objectStore('kv'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)}));
+const put=(k,v)=>idb('readwrite',s=>s.put(v,k)),get=k=>idb('readonly',s=>s.get(k));
+// state: {session, words:[{word,diff,target:{pcm,sr,dur,ts},attempts:[{pcm,sr,dur,ts,rating,note}]}], cur}
+let S=null,ctx=null,player=null;
+const $=id=>document.getElementById(id),status=t=>$('status').textContent=t||'';
+const save=()=>put('state',S).catch(e=>status('Save failed: '+e));
+function newSession(){S={session:new Date().toISOString(),cur:0,words:[...pick(WORDS.easy,2).map(w=>[w,'easy']),...pick(WORDS.medium,1).map(w=>[w,'medium']),...pick(WORDS.hard,2).map(w=>[w,'hard'])].map(([word,diff])=>({word,diff,target:null,attempts:[]}))};save();render()}
+const AC=()=>ctx||(ctx=new (window.AudioContext||window.webkitAudioContext)());
+function play(f,sr){const c=AC();c.resume();if(player)try{player.stop()}catch(e){};const b=c.createBuffer(1,f.length,sr);b.copyToChannel(f,0);player=c.createBufferSource();player.buffer=b;player.connect(c.destination);player.start()}
+// ---------- recording ----------
+let rec=null;
+async function startRec(onDone,btn){
+  const c=AC();await c.resume();
+  let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}})}catch(e){status('Mic blocked: '+e.message);return}
+  const src=c.createMediaStreamSource(stream),proc=c.createScriptProcessor(4096,1,1),chunks=[];
+  proc.onaudioprocess=e=>chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  src.connect(proc);proc.connect(c.destination);
+  const stop=()=>{if(!rec)return;rec=null;clearTimeout(tm);proc.disconnect();src.disconnect();stream.getTracks().forEach(t=>t.stop());
+    let n=0;chunks.forEach(x=>n+=x.length);const f=new Float32Array(n);let o=0;chunks.forEach(x=>{f.set(x,o);o+=x.length});
+    onDone({pcm:f,sr:c.sampleRate,dur:+(n/c.sampleRate).toFixed(3),ts:new Date().toISOString()})};
+  const tm=setTimeout(stop,MAX_MS);rec={stop};btn.textContent='⏹ Stop (auto 4s)';btn.classList.add('recording')}
+function recBtn(label,onDone){const b=document.createElement('button');b.className='rec';b.textContent=label;b.onclick=()=>rec?rec.stop():startRec(onDone,b);return b}
+// ---------- render ----------
+function el(tag,props={},...kids){const e=Object.assign(document.createElement(tag),props);kids.forEach(k=>e.append(k));return e}
+function render(){
+  const W=$('words');W.innerHTML='';S.words.forEach((w,i)=>W.append(el('button',{className:(i===S.cur?'cur ':'')+w.diff,textContent:w.word+(w.attempts.length?' ·'+w.attempts.length:''),onclick:()=>{S.cur=i;save();render()}})));
+  const w=S.words[S.cur],M=$('main');M.innerHTML='';
+  const card=el('div',{className:'card'},el('div',{style:'text-align:center'},el('span',{className:'tag '+w.diff,textContent:w.diff})),el('div',{className:'word',textContent:w.word}));
+  card.append(el('h3',{textContent:'1. Target'}));
+  card.append(recBtn(w.target?'🎙 Re-record target':'🎙 Record target',r=>{w.target=r;w.attempts=[];save();render();play(reverse(r.pcm),r.sr)}));
+  if(w.target){card.append(el('div',{className:'muted',textContent:`Target ${w.target.dur}s`}),
+    el('div',{className:'row'},el('button',{className:'sky',textContent:'▶ Original',onclick:()=>play(w.target.pcm,w.target.sr)}),el('button',{className:'mint',textContent:'⏪ Reversed',onclick:()=>play(reverse(w.target.pcm),w.target.sr)})));
+    card.append(el('h3',{textContent:'2. Mimic the reversed clip'}));
+    card.append(recBtn('🎙 Record mimic attempt',r=>{r.rating=null;r.note='';w.attempts.push(r);save();render();play(reverse(r.pcm),r.sr)}))}
+  M.append(card);
+  w.attempts.forEach((a,i)=>{const val=el('b',{textContent:a.rating==null?'–':a.rating});
+    const sl=el('input',{type:'range',min:1,max:10,value:a.rating||5,oninput:()=>{a.rating=+sl.value;val.textContent=a.rating},onchange:save});
+    const nt=el('textarea',{placeholder:'Note (optional)',value:a.note||'',onchange:()=>{a.note=nt.value;save()}});
+    M.append(el('div',{className:'card att'},el('h3',{textContent:`Attempt ${i+1} `},el('span',{className:'muted',textContent:a.dur+'s'})),
+      el('div',{className:'row'},el('button',{className:'sky',textContent:'A ▶ Target',onclick:()=>play(w.target.pcm,w.target.sr)}),el('button',{className:'mint',textContent:'B ▶ Reveal',onclick:()=>play(reverse(a.pcm),a.sr)})),
+      el('button',{textContent:'▶ Raw mimic',style:'font-size:16px;padding:10px',onclick:()=>play(a.pcm,a.sr)}),
+      el('div',{},'Rating (1–10): ',val),sl,nt,
+      el('button',{textContent:'🗑 Delete attempt',style:'font-size:14px;padding:8px;background:#eee',onclick:()=>{if(confirm('Delete attempt?')){w.attempts.splice(i,1);save();render()}}})))});
+  status(`Session ${S.session.slice(0,16).replace('T',' ')}`)}
+// ---------- export ----------
+async function doExport(){status('Building zip…');const files=[],meta={session:S.session,sampleRate:SR_OUT,words:[]};
+  const add=async(name,f,sr)=>files.push({name,data:wav16(await resample(f,sr,SR_OUT),SR_OUT)});
+  const tag=S.session.replace(/[:.]/g,'-').slice(0,19);
+  for(const [wi,w] of S.words.entries()){if(!w.target)continue;const base=`${wi+1}_${w.word.toLowerCase()}`;
+    await add(`${base}/target.wav`,w.target.pcm,w.target.sr);await add(`${base}/target_reversed.wav`,reverse(w.target.pcm),w.target.sr);
+    const m={word:w.word,difficulty:w.diff,target:{file:`${base}/target.wav`,duration:w.target.dur,timestamp:w.target.ts},attempts:[]};
+    for(const [ai,a] of w.attempts.entries()){const n=String(ai+1).padStart(2,'0');
+      await add(`${base}/mimic_${n}.wav`,a.pcm,a.sr);await add(`${base}/reveal_${n}.wav`,reverse(a.pcm),a.sr);
+      m.attempts.push({attempt:ai+1,rating:a.rating,ratingScale:'1-10',note:a.note,duration:a.dur,timestamp:a.ts,mimic:`${base}/mimic_${n}.wav`,reveal:`${base}/reveal_${n}.wav`})}
+    meta.words.push(m)}
+  if(!files.length){status('Nothing recorded yet');return}
+  files.push({name:'ratings.json',data:new TextEncoder().encode(JSON.stringify(meta,null,2))});
+  const url=URL.createObjectURL(zip(files)),a=el('a',{href:url,download:`hausz_${tag}.zip`});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  status(`Exported ${files.length} files`)}
+$('export').onclick=()=>doExport().catch(e=>status('Export failed: '+e));
+$('shuffle').onclick=()=>{if(!S.words.some(w=>w.target)||confirm('Start a new session? (Export first — the current one will be replaced.)'))newSession()};
+get('state').then(s=>{if(s){S=s;render()}else newSession()}).catch(()=>newSession());
+}
+</script></body></html>
