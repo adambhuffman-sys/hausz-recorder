@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Haüsz Recorder</title>
+<title>Haüsz Recorder v2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@600;800&family=Rubik:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -13,7 +13,9 @@ h1{font-size:28px}
 .card{background:#fff;border-radius:24px;padding:18px;margin:14px 0;box-shadow:0 4px 0 rgba(0,0,0,.08)}
 .word{font-family:Kanit,system-ui,sans-serif;font-size:48px;font-weight:800;letter-spacing:2px;text-align:center;margin:6px 0}
 .tag{display:inline-block;padding:3px 12px;border-radius:99px;font-size:13px;font-weight:600}
-.easy{background:var(--mint)}.medium{background:var(--sky)}.hard{background:var(--coral);color:#fff}
+.Chill{background:var(--mint)}.Normie{background:var(--sky)}.Tryhard{background:var(--lilac)}.Unnecessary{background:var(--coral);color:#fff}
+select,input[type=text]{width:100%;font:inherit;font-size:18px;border-radius:12px;border:2px solid #ddd;padding:10px;margin:4px 0;background:#fff}
+label{font-weight:600;font-size:14px}
 button{font-family:Kanit,system-ui,sans-serif;font-size:20px;font-weight:600;border:0;border-radius:20px;padding:16px;width:100%;margin:6px 0;color:var(--ink);background:var(--lilac);box-shadow:0 4px 0 rgba(0,0,0,.15)}
 button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.15)}
 button:disabled{opacity:.4}
@@ -29,17 +31,15 @@ textarea{width:100%;font:inherit;border-radius:12px;border:2px solid #ddd;paddin
 #bar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px;background:var(--bg)}
 #status{text-align:center;font-size:14px;min-height:18px}
 </style></head><body>
-<h1>Haüsz Recorder</h1>
+<h1>Haüsz Recorder <span class="muted">v2</span></h1>
 <div class="muted">Record a target → hear it reversed → mimic → hear the reveal → rate it. Everything is saved on this phone.</div>
-<div class="card"><div class="words" id="words"></div><button class="sky" id="shuffle">🔀 New 5 words</button></div>
+<div class="card"><div class="row"><div><label>Speaker</label><input type="text" id="speaker"></div><div><label>Environment</label><select id="noise"><option value="quiet">Quiet</option><option value="noisy">Noisy</option></select></div></div><div class="words" id="words"></div><button class="sky" id="shuffle">🔀 New 5 words</button></div>
 <div id="main"></div>
 <div id="bar"><div id="status"></div><button class="mint" id="export">⬇️ Export ZIP</button></div>
 <script>
 'use strict';
 // ---------- word list ----------
-const WORDS={easy:['CAT','MOON','DOG','SUN','BALL','FISH','TREE','CAKE','BOOK','HAT','MILK','RAIN','DUCK'],
-medium:['PICKLE','GARDEN','BUTTER','WINDOW','DRAGON','PLANET','CANDLE','MONKEY','JACKET','PENCIL','TURTLE','ROCKET','BASKET','LEMON'],
-hard:['CRISP','SQUIRREL','ALUMINUM','STRENGTHS','RHYTHM','ANEMONE','SIXTH','SPAGHETTI','PHENOMENON','THRESHOLD','WORCESTERSHIRE','ONOMATOPOEIA','BREWERY']};
+const WORDS={"Chill":["PHENOMENON","LULLABY","BANANA","HALLELUJAH","VANILLA","CINNAMON","CHIHUAHUA","LOLLIPOP","MAGICIAN","MISSISSIPPI","LIMOUSINE","CARAMEL","LASAGNA","MONOPOLY","ADORABLE","AMAZING","WATERMELON","MELODY","PELICAN","UNIVERSE","BUFFALO","UMBRELLA","DELICIOUS","LEMONADE","VIOLIN","VOLLEYBALL","MUSHROOM","PINEAPPLE","VACATION","BOOMERANG","COCONUT","MOZZARELLA","ENORMOUS","PARMESAN","RIDICULOUS","KARAOKE","TELEVISION","MACARONI","XYLOPHONE","ONOMATOPOEIA"],"Normie":["LIGHTNING","HURRICANE","HOLIDAY","UNICORN","PAJAMAS","TELEPHONE","KOALA","PIANO","DINOSAUR","HARMONY","TOMATO","ELEVATOR","HILARIOUS","AVALANCHE","ALLIGATOR","ACCORDION","TERRIFIC","SUBMARINE","HAMBURGER","PEPPERONI","MICROPHONE","ARMADILLO","RHINOCEROS","CELEBRATION","RAINBOW","SKELETON","ELEPHANT","SNOWMAN","MYSTERIOUS","VAMPIRE","MYSTERY","MOTORCYCLE","HIPPOPOTAMUS","POTATO","AVOCADO","BURRITO","SUSPICIOUS","DOLPHIN","VEGETABLE","MARSHMALLOW","AIRPLANE","SATELLITE","BICYCLE"],"Tryhard":["GOBLIN","TARANTULA","ASTRONOMER","CATERPILLAR","WEREWOLF","FOOTBALL","MOSQUITO","VOLCANO","COYOTE","PARACHUTE","ABRACADABRA","TORTILLA","KANGAROO","CALENDAR","MONSTER","SAXOPHONE","DRAGON","INCREDIBLE","OCTOPUS","TSUNAMI","HARMONIOUS","ESCALATOR","CHEESEBURGER","DETECTIVE","PENGUIN","GALAXY","DICTIONARY","AMBULANCE","TREMENDOUS","BUTTERFLY","PECULIAR","REFRIGERATOR","BROCCOLI","BLUEBERRY","BASEBALL","FLAMINGO","HAMSTER","SUNFLOWER","ADVENTURE","HELICOPTER","TRAMPOLINE","TORNADO","ASTEROID"],"Unnecessary":["EXCELLENT","GORGEOUS","SPAGHETTI","TRUMPET","PLANET","ASTRONAUT","CROCODILE","PUMPKIN","GUACAMOLE","CACTUS","FANTASTIC","CHOCOLATE","COMPUTER","SANDWICH","PLATYPUS","SQUIRREL","HEDGEHOG","PANCAKE","DANGEROUS","TUXEDO","MAGNIFICENT","BLIZZARD","GIGANTIC","FIREWORKS","EXPLOSION","POPCORN","CATASTROPHE","TRACTOR","BASKETBALL","ENCYCLOPEDIA","CUPCAKE","CUCUMBER","STRAWBERRY","KALEIDOSCOPE","GYMNASTICS","SCARECROW","SNOWFLAKE","FRANKENSTEIN","SPECTACULAR","SKATEBOARD"]};
 const pick=(a,n)=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a.slice(0,n)};
 // ---------- audio utils ----------
 const SR_OUT=16000,MAX_MS=4000;
@@ -70,14 +70,17 @@ if(typeof module!=='undefined'){module.exports={reverse,wav16,crc32,zip};}
 'use strict';
 if(typeof document!=='undefined'){
 // ---------- IndexedDB ----------
-const DB=new Promise((res,rej)=>{const r=indexedDB.open('hausz-recorder',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const DB=new Promise((res,rej)=>{const r=indexedDB.open('hausz-recorder-v2',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const idb=(mode,fn)=>DB.then(db=>new Promise((res,rej)=>{const t=db.transaction('kv',mode),q=fn(t.objectStore('kv'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)}));
 const put=(k,v)=>idb('readwrite',s=>s.put(v,k)),get=k=>idb('readonly',s=>s.get(k));
 // state: {session, words:[{word,diff,target:{pcm,sr,dur,ts},attempts:[{pcm,sr,dur,ts,rating,note}]}], cur}
 let S=null,ctx=null,player=null;
 const $=id=>document.getElementById(id),status=t=>$('status').textContent=t||'';
 const save=()=>put('state',S).catch(e=>status('Save failed: '+e));
-function newSession(){S={session:new Date().toISOString(),cur:0,words:[...pick(WORDS.easy,2).map(w=>[w,'easy']),...pick(WORDS.medium,1).map(w=>[w,'medium']),...pick(WORDS.hard,2).map(w=>[w,'hard'])].map(([word,diff])=>({word,diff,target:null,attempts:[]}))};save();render()}
+const TIERS=['Chill','Normie','Tryhard','Unnecessary'],TYPES=['','Best try','Sloppy','Said forward','Mumble/cough','Other'];
+function newSession(){const sp=S?S.speaker:'Adam',nz=S?S.noise:'quiet';const extra=TIERS[Math.random()*4|0];
+  const used=new Set(),ws=[...TIERS,extra].map(t=>{const w=pick(WORDS[t].filter(x=>!used.has(x)),1)[0];used.add(w);return [w,t]}).sort((a,b)=>TIERS.indexOf(a[1])-TIERS.indexOf(b[1]));
+  S={version:2,session:new Date().toISOString(),speaker:sp,noise:nz,cur:0,words:ws.map(([word,diff])=>({word,diff,speaker:'',target:null,attempts:[]}))};save();render()}
 const AC=()=>ctx||(ctx=new (window.AudioContext||window.webkitAudioContext)());
 function play(f,sr){const c=AC();c.resume();if(player)try{player.stop()}catch(e){};const b=c.createBuffer(1,f.length,sr);b.copyToChannel(f,0);player=c.createBufferSource();player.buffer=b;player.connect(c.destination);player.start()}
 // ---------- recording ----------
@@ -96,42 +99,45 @@ function recBtn(label,onDone){const b=document.createElement('button');b.classNa
 // ---------- render ----------
 function el(tag,props={},...kids){const e=Object.assign(document.createElement(tag),props);kids.forEach(k=>e.append(k));return e}
 function render(){
-  const W=$('words');W.innerHTML='';S.words.forEach((w,i)=>W.append(el('button',{className:(i===S.cur?'cur ':'')+w.diff,textContent:w.word+(w.attempts.length?' ·'+w.attempts.length:''),onclick:()=>{S.cur=i;save();render()}})));
+  $('speaker').value=S.speaker||'';$('noise').value=S.noise||'quiet';const W=$('words');W.innerHTML='';S.words.forEach((w,i)=>W.append(el('button',{className:(i===S.cur?'cur ':'')+w.diff,textContent:w.word+(w.attempts.length?' ·'+w.attempts.length:''),onclick:()=>{S.cur=i;save();render()}})));
   const w=S.words[S.cur],M=$('main');M.innerHTML='';
   const card=el('div',{className:'card'},el('div',{style:'text-align:center'},el('span',{className:'tag '+w.diff,textContent:w.diff})),el('div',{className:'word',textContent:w.word}));
-  card.append(el('h3',{textContent:'1. Target'}));
+  const spw=el('input',{type:'text',placeholder:'Word speaker (blank = '+(S.speaker||'session')+')',value:w.speaker||'',onchange:()=>{w.speaker=spw.value.trim();save()}});
+  card.append(el('label',{textContent:'Speaker for this word (optional)'}),spw,el('h3',{textContent:'1. Target'}));
   card.append(recBtn(w.target?'🎙 Re-record target':'🎙 Record target',r=>{w.target=r;w.attempts=[];save();render();play(reverse(r.pcm),r.sr)}));
   if(w.target){card.append(el('div',{className:'muted',textContent:`Target ${w.target.dur}s`}),
     el('div',{className:'row'},el('button',{className:'sky',textContent:'▶ Original',onclick:()=>play(w.target.pcm,w.target.sr)}),el('button',{className:'mint',textContent:'⏪ Reversed',onclick:()=>play(reverse(w.target.pcm),w.target.sr)})));
     card.append(el('h3',{textContent:'2. Mimic the reversed clip'}));
-    card.append(recBtn('🎙 Record mimic attempt',r=>{r.rating=null;r.note='';w.attempts.push(r);save();render();play(reverse(r.pcm),r.sr)}))}
+    card.append(recBtn('🎙 Record mimic attempt',r=>{r.rating=null;r.note='';r.type='';w.attempts.push(r);save();render();play(reverse(r.pcm),r.sr)}))}
   M.append(card);
   w.attempts.forEach((a,i)=>{const val=el('b',{textContent:a.rating==null?'–':a.rating});
     const sl=el('input',{type:'range',min:1,max:10,value:a.rating||5,oninput:()=>{a.rating=+sl.value;val.textContent=a.rating},onchange:save});
+    const ty=el('select',{onchange:()=>{a.type=ty.value;save()}});TYPES.forEach(t=>ty.append(el('option',{value:t,textContent:t||'Attempt type (optional)'})));ty.value=a.type||'';
     const nt=el('textarea',{placeholder:'Note (optional)',value:a.note||'',onchange:()=>{a.note=nt.value;save()}});
     M.append(el('div',{className:'card att'},el('h3',{textContent:`Attempt ${i+1} `},el('span',{className:'muted',textContent:a.dur+'s'})),
       el('div',{className:'row'},el('button',{className:'sky',textContent:'A ▶ Target',onclick:()=>play(w.target.pcm,w.target.sr)}),el('button',{className:'mint',textContent:'B ▶ Reveal',onclick:()=>play(reverse(a.pcm),a.sr)})),
       el('button',{textContent:'▶ Raw mimic',style:'font-size:16px;padding:10px',onclick:()=>play(a.pcm,a.sr)}),
-      el('div',{},'Rating (1–10): ',val),sl,nt,
+      ty,el('div',{},'Rating (1–10): ',val),sl,nt,
       el('button',{textContent:'🗑 Delete attempt',style:'font-size:14px;padding:8px;background:#eee',onclick:()=>{if(confirm('Delete attempt?')){w.attempts.splice(i,1);save();render()}}})))});
   status(`Session ${S.session.slice(0,16).replace('T',' ')}`)}
 // ---------- export ----------
-async function doExport(){status('Building zip…');const files=[],meta={session:S.session,sampleRate:SR_OUT,words:[]};
+async function doExport(){status('Building zip…');const files=[],meta={version:2,session:S.session,speaker:S.speaker,environment:S.noise,sampleRate:SR_OUT,words:[]};
   const add=async(name,f,sr)=>files.push({name,data:wav16(await resample(f,sr,SR_OUT),SR_OUT)});
   const tag=S.session.replace(/[:.]/g,'-').slice(0,19);
   for(const [wi,w] of S.words.entries()){if(!w.target)continue;const base=`${wi+1}_${w.word.toLowerCase()}`;
     await add(`${base}/target.wav`,w.target.pcm,w.target.sr);await add(`${base}/target_reversed.wav`,reverse(w.target.pcm),w.target.sr);
-    const m={word:w.word,difficulty:w.diff,target:{file:`${base}/target.wav`,duration:w.target.dur,timestamp:w.target.ts},attempts:[]};
+    const m={word:w.word,tier:w.diff,speaker:w.speaker||S.speaker,environment:S.noise,target:{file:`${base}/target.wav`,duration:w.target.dur,timestamp:w.target.ts},attempts:[]};
     for(const [ai,a] of w.attempts.entries()){const n=String(ai+1).padStart(2,'0');
       await add(`${base}/mimic_${n}.wav`,a.pcm,a.sr);await add(`${base}/reveal_${n}.wav`,reverse(a.pcm),a.sr);
-      m.attempts.push({attempt:ai+1,rating:a.rating,ratingScale:'1-10',note:a.note,duration:a.dur,timestamp:a.ts,mimic:`${base}/mimic_${n}.wav`,reveal:`${base}/reveal_${n}.wav`})}
+      m.attempts.push({attempt:ai+1,rating:a.rating,ratingScale:'1-10',type:a.type||null,note:a.note,duration:a.dur,timestamp:a.ts,mimic:`${base}/mimic_${n}.wav`,reveal:`${base}/reveal_${n}.wav`})}
     meta.words.push(m)}
   if(!files.length){status('Nothing recorded yet');return}
   files.push({name:'ratings.json',data:new TextEncoder().encode(JSON.stringify(meta,null,2))});
   const url=URL.createObjectURL(zip(files)),a=el('a',{href:url,download:`hausz_${tag}.zip`});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
   status(`Exported ${files.length} files`)}
+$('speaker').onchange=()=>{S.speaker=$('speaker').value.trim()||'Adam';save();render()};$('noise').onchange=()=>{S.noise=$('noise').value;save()};
 $('export').onclick=()=>doExport().catch(e=>status('Export failed: '+e));
 $('shuffle').onclick=()=>{if(!S.words.some(w=>w.target)||confirm('Start a new session? (Export first — the current one will be replaced.)'))newSession()};
-get('state').then(s=>{if(s){S=s;render()}else newSession()}).catch(()=>newSession());
+get('state').then(s=>{if(s){S=s;S.speaker=S.speaker||'Adam';S.noise=S.noise||'quiet';render()}else newSession()}).catch(()=>newSession());
 }
 </script></body></html>
